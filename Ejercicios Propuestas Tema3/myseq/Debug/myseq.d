@@ -1,0 +1,1 @@
+myseq.o: ../myseq.c
