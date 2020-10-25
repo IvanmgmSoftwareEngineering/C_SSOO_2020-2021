@@ -1,0 +1,1 @@
+myinvert.o: ../myinvert.c
