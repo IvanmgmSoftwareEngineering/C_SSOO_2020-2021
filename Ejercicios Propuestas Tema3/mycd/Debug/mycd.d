@@ -1,0 +1,1 @@
+mycd.o: ../mycd.c
