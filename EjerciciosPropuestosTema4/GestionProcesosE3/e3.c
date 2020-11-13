@@ -1,4 +1,4 @@
-/* TÍTULO: e2.c
+/* TÍTULO: e3.c
  * AUTOR:  Iván Martín Gómez
  *
  * Sintaxis: nombre_programa Argumento1 [Argumento2] ... [Argumento_n-1 [Argumento_n]]
@@ -27,7 +27,7 @@
 #include <string.h>
 #include <unistd.h> // para Llamada al Sistema fork()
 #include <signal.h> // para Llamada al Sistema signal()
-#include <ctype.h>  // para Funcion de Biblioteca toupper(); pasa un char de lower case to upper case
+//#include <ctype.h>  // para Funcion de Biblioteca toupper(); pasa un char de lower case to upper case
 
 //LIBRERÍAS PROPIAS (entre " ")
 //#include "lireria.h"
@@ -100,8 +100,10 @@ int main (int argc, char *argv[], char *envp[]){
 
 // ZONA DE DECLARACION DE VARIABLES GLOBALES
 		int i;
-		char buf_padre_envio[1024];    // El lee de teclado con Función de biblioteca fgets() y lo almacena en variable buf_padre_envio
-		char buf_hijo_recepcion[1024]; // El Hijo recepciona en buf_hijo_recepcion lo que hay en buf_padre_envio a través del Pipe con flujo Padre---->>Hijo
+		int aleatorio;
+		char linea[1024];
+		//char buf_padre_envio[1024];    // El lee de teclado con Función de biblioteca fgets() y lo almacena en variable buf_padre_envio
+		//char buf_hijo_recepcion[1024]; // El Hijo recepciona en buf_hijo_recepcion lo que hay en buf_padre_envio a través del Pipe con flujo Padre---->>Hijo
 		char buf_hijo_envio[1024];	   // El Hijo transforma lo que hay en buf_hijo_recepcion en Mayúsculas y lo guarda en la variable buf_hijo_envio
 		char buf_padre_recepcion[1024];// El Padre recepciona en buf_padre_recepcion lo que hay en buf_hijo_envio a través del Pipe con flujo Hijo---->>Padre
 
@@ -160,7 +162,7 @@ int main (int argc, char *argv[], char *envp[]){
 // FIN DE CONTROL ERRORES ARGUMENTOS
 //---------------------------------
 // EMPIEZA FUNCIONALIDAD PROGRAMA
-		pipe(fd_tuberia_del_padre_al_hijo); // creamos el Pipe para enviar datos desde el padre hacia el hijo
+		//pipe(fd_tuberia_del_padre_al_hijo); // creamos el Pipe para enviar datos desde el padre hacia el hijo
 		pipe(fd_tuberia_del_hijo_al_padre); // creamos el Pipe para enviar datos desde el padre hacia el hijo
 		printf("-----------------EMPIEZA EL PROGRAMA-----------------------\n");
 		printf("Instrucciones: Ingrese caracteres por teclado y pulse enter\n");
@@ -172,53 +174,44 @@ int main (int argc, char *argv[], char *envp[]){
 			printf("Error: al hacer el fork()");
 
 		}else if(pid_fork==0){// ESTAMOS EN EL HIJO
+			srand (time(NULL)); // Va cambiando la semilla que utiliza la función rand() para generar el número aleatorio (la hora del sistema es diferente cada vez que ejecutemos el programa), si no hiciesemos esto la función rand() siempre devolveria los mismo numeros aleatorio en distintas ejecuaciones, ya que utiliza siempre la misma semilla
 			signal(SIGUSR1,manejador_hijo);
 			signal(SIGUSR2,manejador_hijo);
-			close(fd_tuberia_del_padre_al_hijo[1]);//Padre---->>Hijo el hijo solo lee, no escribe. Cierro fd_tph[1].
-			close(fd_tuberia_del_hijo_al_padre[0]);//Padre<<----Hijo el hijo solo escribe, no lee. Cierro fd_thp[1].
+			//close(fd_tuberia_del_padre_al_hijo[1]);// A través de este Pipe con flujo de datos Padre---->>Hijo el hijo solo lee, no escribe. Cierro fd_tph[1].
+			close(fd_tuberia_del_hijo_al_padre[0]);// A través de este Pipe con flujo de datos Padre<<----Hijo el hijo solo escribe, no lee. Cierro fd_thp[1].
 			pause();
 			while(1){ // Así evitamos que el hijo termine
-				read(fd_tuberia_del_padre_al_hijo[0], buf_hijo_recepcion, 1024);
-
-				for (i=0;i<strlen(buf_hijo_recepcion);i++){ //Cuidado aqui ¿Donde termina buf_hijo_recepcion? 1024 o después del ultimo carácter que ha recibido por teclado
-					buf_hijo_envio[i]=toupper(buf_hijo_recepcion[i]);
-				}
-
+				//read(fd_tuberia_del_padre_al_hijo[0], buf_hijo_recepcion, 1024);
+				aleatorio=rand() % 11; // Devuelve un número aleatorio entre 0 y N, donde N+1=11
+				//aleatorio=rand() % (N-M+1) + M; // Devuelve un número aleatorio entre M y N
+				sprintf(buf_hijo_envio, "%i", aleatorio);// Limpia lo que hemos recibido por stdin quitando saltos de linea y redimensionando el indice maximo del string
+				strcspn(buf_hijo_envio, "\r\n");
+				//printf("Hijo: buf_hijo_envio= %s\n", buf_hijo_envio);
 				write(fd_tuberia_del_hijo_al_padre[1], buf_hijo_envio, 1024);
-				memset(buf_hijo_recepcion, 0, 1024); //Limpiamos: ponemos \0 en los 1024 caracteres
-				memset(buf_hijo_envio, 0, 1024);//Limpiamos: ponemos \0 en los 1024 caracteres
-				kill(getppid(),SIGUSR1);//Enviamos señal al padre para sacarle del pause
-				pause(); //Pausamos al hijo para que deje trabajar al padre
+				kill(getppid(),SIGUSR2); //Enviamos una señal al padre para que salga del pause()
+				pause();//Pausamos al hijo para que deje trabajar al padre
+				//Notar que al haber implementado dos funciones diferentes para tratar las señales que recibe el hijo (manejador_hijo) y el padre (manejador_padre) respectivamente, Podemos rehutilizar las señales SIGUSR1 y SIGUSR2
 			}
 
 		}else{ // ESTAMOS EN EL PADRE
-			signal(SIGUSR1,manejador_padre);
-			close(fd_tuberia_del_padre_al_hijo[0]);// Padre---->>Hijo el padre solo escribe, no lee. Cierro fd_tph[0].
-			close(fd_tuberia_del_hijo_al_padre[1]);//Padre<<----Hijo el padre solo lee, no escribe. Cierro fd_thp[0].
-			while(fgets(buf_padre_envio, 1024, stdin) != NULL){// Bucle que no para de leer lineas hasta que pulsamos ctrl+D
-
-				buf_padre_envio[strcspn(buf_padre_envio, "\r\n")] = 0; // Limpia lo que hemos recibido por stdin quitando saltos de linea y redimensionando el indice maximo del string
-				write(fd_tuberia_del_padre_al_hijo[1], buf_padre_envio, 1024);
-				kill(pid_fork,SIGUSR2); //Enviamos señal al hijo para sacarle del pause
-				pause(); // Pausamos al padre para que deje trabajar al hijo
+			signal(SIGUSR2,manejador_padre);
+			//close(fd_tuberia_del_padre_al_hijo[0]);// A través de este Pipe con flujo de datos Padre---->>Hijo el padre solo escribe, no lee. Cierro fd_tph[0].
+			close(fd_tuberia_del_hijo_al_padre[1]);// A través de este Pipe con flujo de datos Padre<<----Hijo el padre solo lee, no escribe. Cierro fd_thp[0].
+			while(fgets(linea, 1024, stdin) != NULL){ // Bucle que no para de leer lineas hasta que pulsamos ctrl+D
+				fflush(stdin);//Limpiamos stdin
+				kill(pid_fork,SIGUSR2);//Enviamos una señal al hijo para que salga del pause();
+				pause();// Pausamos al padre para que deje trabajar al hijo
 				read(fd_tuberia_del_hijo_al_padre[0], buf_padre_recepcion, 1024);
 				printf("%s\n",buf_padre_recepcion);
-				memset(buf_padre_envio, 0, 1024); //Limpiamos: ponemos \0 en los 1024 caracteres
-				memset(buf_padre_recepcion, 0, 1024);//Limpiamos: ponemos \0 en los 1024 caracteres
-				fflush(stdin); // Limpiamos stdin
 
-			} //Salimos de while por que fgets==NULL, es decir, hemos leido el Final de Fichero (hemos pulsado ctrl+D)
-
-			kill(pid_fork,SIGUSR1); //Enviamos señal al hijo para que muera
-			wait(NULL); // Un buen padre espera por su hijo
-			close(fd_tuberia_del_padre_al_hijo[1]);//Cerramos los Pipe's antes de abandonar el programa
-			close(fd_tuberia_del_hijo_al_padre[0]);//Cerramos los Pipe's antes de abandonar el programa
+			}
+			kill(pid_fork,SIGUSR1); //Enviamos una señal al hijo para que muera
+			wait(NULL);
+			//printf("El hijo ha terminado\n");
+			close(fd_tuberia_del_hijo_al_padre[1]);//Cerramos los Pipe's antes de abandonar el programa
 			printf("(Ctrl+D) (Fin de Archivo)\n");
-			exit (0); //Matgamos al padre
-
+			exit (0);
 		}
-
-		//¿¿NO HA SIDO NECESARIO UTILIZAR PAUSE() NI LOS ENVIOS DE SEÑALES ASOCIADOS PARA SACAR DEL PAUSE AL PDRE DESDE EL HIJO Y AL HIJO DESDE EL PADRE (HECHO ASI EN E3, Y TAMBIEN FUNCIONA)?? ES COMO SI SE SINCRONIZASE SOLO CON LOS PIPES
 
 
 
@@ -230,9 +223,10 @@ int main (int argc, char *argv[], char *envp[]){
 			// fgets(): lee de un FILE
 			// fputs(): escribe en un FILE
 			// fflush(): sirve para borrar el FILE stdin y ¿stdout?
-			// toupper(): cambia de minúsculas a mayúsculas
+			// rand(3): rand(void), bad rambom number generator
+		    // srand(3): srand(unsigned seed),bad rambom number generator
+			// sptrinf(): pasa de int a string
 			// srtcspn(): redimensiona un string, es decir, si inicialmente tenmos un string de tamaño 1024 y solo almacenamos en el un string de tamaño 2, se redimensiona a tamamño 2.
-			// memset(): pone todos los valores de una cadena a un determinado valor
 
 		//Incluir estructura básica para leer de teclado
 
@@ -268,14 +262,16 @@ int main (int argc, char *argv[], char *envp[]){
 		// FIN DE CONTROL ERRORES ARGUMENTOS
 		//---------------------------------
 		// ZONA DE FUNCIONALIDAD FUNCION
+			//printf("Padre: Recibida señal. %d\n", sig);
+			if(sig==SIGINT){//El hijo ya esta muerto, entonces podemos matar al padre
+				//close(fd_tuberia_del_padre_al_hijo[1]);//Cerramos los Pipe's antes de abandonar el programa
 
-			//printf("Padre: Recibida señal!! %d\n", sig);
-			if(sig==SIGUSR1){//El hijo
-				//No hace nada, solo saca del pause al padre
-			}else if (sig==SIGINT){ //El hijo no esta muerto, entonces hay que matar al hijo antes de matar al padre para evitar eque el hijo se quede en estado 'zombie'
+				//exit(0); // matamos al padre
+			}else if(sig==SIGUSR2){
+
+				//No hace nada, solo queremos que el padre pase a ejecutar la siguiente linea a continuacion del pause()
 
 			}
-
 		// FIN ZONA DE FUNCIONALIDAD FUNCION
 	}
 	//FIN IMPLEMENTACION FUNCION 1
@@ -283,12 +279,14 @@ int main (int argc, char *argv[], char *envp[]){
 	//IMPLEMENTACION FUNCION 2
 		void manejador_hijo(int sig){
 				//printf("Hijo: Recibida señal. %d\n", sig);
-				if(sig==SIGUSR1){// El padre ha recibido ctrl+D ==> El padre ha enviado señal al hijo para que muera.
-					close(fd_tuberia_del_padre_al_hijo[0]);//Cerramos los Pipe's antes de abandonar el programa
-					close(fd_tuberia_del_hijo_al_padre[1]);//Cerramos los Pipe's antes de abandonar el programa
+				if(sig==SIGUSR1){// SIGINT=2 , Enviamos señal al padre y matamos al hijo
+					//close(fd_tuberia_del_padre_al_hijo[0]);//Cerramos los Pipe's antes de abandonar el programa
+					close(fd_tuberia_del_hijo_al_padre[0]);//Cerramos los Pipe's antes de abandonar el programa
 					exit(0);
-				}else if(sig==SIGUSR2){// SIGINT=2 , Enviamos señal al padre y matamos al hijo
-					// No hacemos nada, solo sacamos del pause al hijo
+				}else if(sig==SIGUSR2){
+
+					//No hace nada, solo queremos que el hijo pase a ejecutar la siguiente linea a continuacion del pause()
+
 				}
 		}
 	//FIN IMPLEMENTACION FUNCION 2
@@ -302,3 +300,4 @@ int main (int argc, char *argv[], char *envp[]){
 
 
 // FIN IMPLEMENTACIONES FUNCIONES CUYAS CABAECERAS ESTAN DEFINIDAS AL PRINCIPIO DE ESTE DOCUMENTO UTILIZADAS DENTRO DE MAIN
+
