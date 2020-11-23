@@ -214,7 +214,7 @@ int main (int argc, char *argv[], char *envp[]){
 			close(fd_tuberia_del_padre_al_hijo[1]);//Cerramos los Pipe's antes de abandonar el programa
 			close(fd_tuberia_del_hijo_al_padre[0]);//Cerramos los Pipe's antes de abandonar el programa
 			printf("(Ctrl+D) (Fin de Archivo)\n");
-			exit (0); //Matgamos al padre
+			exit (0); //Matamos al padre
 
 		}
 

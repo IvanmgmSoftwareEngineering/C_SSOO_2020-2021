@@ -27,7 +27,7 @@
 #include <string.h>
 #include <unistd.h> // para Llamada al Sistema fork()
 #include <signal.h> // para Llamada al Sistema signal()
-//#include <ctype.h>  // para Funcion de Biblioteca toupper(); pasa un char de lower case to upper case
+#include <ctype.h>  // para Funcion de Biblioteca toupper(); pasa un char de lower case to upper case
 
 //LIBRERÍAS PROPIAS (entre " ")
 //#include "lireria.h"
@@ -57,12 +57,11 @@
 // FIN CABECERAS FUNCIONES UTILIZADAS DENTRO DE MAIN
 //---------------------------------
 
-// EMPIEZA FUNCION MAIN
+// ZONA DE VARIABLES GLOBALES
 
-pid_t pid_fork; // Variable global para tratar lo que devuelve la Llamada al Sistema fork(). Se pone aquí fuera porque esta variable será consultada desde las funciones que están fuera del main()
 
 //----------------CONCEPTO DE PIPE---------------------
-		//fd=File Descriptor. Este array de 2 enteros se le pasara como argumento a la Llamada al Sistema pipe()
+		//fd=File_Descriptor [2]. Este array de 2 enteros se le pasara como argumento a la Llamada al Sistema pipe()
 		//TODOS LOS PIPES SE CREAN ANTES DEL fork().
 		//CUIDADO AHORA!! ESTE CONCEPTO ES ESCURRIDIZO: como el de la consulta de la variable de tipo pid_t pid_fork que devuelve la LLamada al Sistema fork()
 		//											 	recordar que el valor de la variable pid_fork varia dependiendo del Proceso desde el que la estamos consultando.
@@ -83,8 +82,8 @@ pid_t pid_fork; // Variable global para tratar lo que devuelve la Llamada al Sis
 		//	fd_thp[0]=El padre no escribe, estando en el padre close (fd_thp[0])
 		//------------------------------------------------------
 		//fd=File Descriptor. Este array de 2 enteros se le pasara como argumento a la Llamada al Sistema pipe()
-		int fd_tuberia_del_padre_al_hijo[2]; //fd_tph GLOBAL PORQUE SE GESTIONA EN funcion fuera del main()
-		int fd_tuberia_del_hijo_al_padre[2]; //fd_thp GLOBAL PORQUE SE GESTIONA EN funcion fuera del main()
+		int fd_tuberia_del_hijo_al_padre[2]; // GLOBAL PORQUE SE GESTIONA EN funcion fuera del main()
+		pid_t pid_fork; // Variable global para tratar lo que devuelve la Llamada al Sistema fork(). Se pone aquí fuera porque esta variable para que pueda ser consultada desde las funciones manejadoras() de señales que están fuera del main()
 
 
 int main (int argc, char *argv[], char *envp[]){
@@ -102,8 +101,6 @@ int main (int argc, char *argv[], char *envp[]){
 		int i;
 		int aleatorio;
 		char linea[1024];
-		//char buf_padre_envio[1024];    // El lee de teclado con Función de biblioteca fgets() y lo almacena en variable buf_padre_envio
-		//char buf_hijo_recepcion[1024]; // El Hijo recepciona en buf_hijo_recepcion lo que hay en buf_padre_envio a través del Pipe con flujo Padre---->>Hijo
 		char buf_hijo_envio[1024];	   // El Hijo transforma lo que hay en buf_hijo_recepcion en Mayúsculas y lo guarda en la variable buf_hijo_envio
 		char buf_padre_recepcion[1024];// El Padre recepciona en buf_padre_recepcion lo que hay en buf_hijo_envio a través del Pipe con flujo Hijo---->>Padre
 
@@ -154,7 +151,7 @@ int main (int argc, char *argv[], char *envp[]){
 // FIN ZONA DE PARSEO
 //----------------------------------
 // ZONA DE CONTROL ERRORES ARGUMENTOS
-		if(argc>2){ //Hemos recibido 1 o más Argumentos:
+		if(argc>1){ //Hemos recibido 1 o más Argumentos:
 			printf("usage: e2: Se han recibido 1 o más Argumentos");
 			return -1;
 		}
@@ -163,27 +160,25 @@ int main (int argc, char *argv[], char *envp[]){
 //---------------------------------
 // EMPIEZA FUNCIONALIDAD PROGRAMA
 		//pipe(fd_tuberia_del_padre_al_hijo); // creamos el Pipe para enviar datos desde el padre hacia el hijo
-		pipe(fd_tuberia_del_hijo_al_padre); // creamos el Pipe para enviar datos desde el padre hacia el hijo
-		printf("-----------------EMPIEZA EL PROGRAMA-----------------------\n");
+		printf("-----------------EMPIEZA FUNCIONALIDAD DEL PROGRAMA-----------------------\n");
 		printf("Instrucciones: Ingrese caracteres por teclado y pulse enter\n");
 		printf("	       Para finalizar el programa pulse Ctrl+D (FIN FICHERO)\n");
 		printf("-----------------------------------------------------------\n");
+		pipe(fd_tuberia_del_hijo_al_padre); // creamos el Pipe para enviar datos desde el padre hacia el hijo
 		pid_fork=fork();
 
 		if(pid_fork<0){ // ERROR AL HACER EL fork()
 			printf("Error: al hacer el fork()");
 
 		}else if(pid_fork==0){// ESTAMOS EN EL HIJO
+			//printf("Estoy en el Hijo\n");
 			srand (time(NULL)); // Va cambiando la semilla que utiliza la función rand() para generar el número aleatorio (la hora del sistema es diferente cada vez que ejecutemos el programa), si no hiciesemos esto la función rand() siempre devolveria los mismo numeros aleatorio en distintas ejecuaciones, ya que utiliza siempre la misma semilla
 			signal(SIGUSR1,manejador_hijo);
 			signal(SIGUSR2,manejador_hijo);
-			//close(fd_tuberia_del_padre_al_hijo[1]);// A través de este Pipe con flujo de datos Padre---->>Hijo el hijo solo lee, no escribe. Cierro fd_tph[1].
 			close(fd_tuberia_del_hijo_al_padre[0]);// A través de este Pipe con flujo de datos Padre<<----Hijo el hijo solo escribe, no lee. Cierro fd_thp[1].
 			pause();
 			while(1){ // Así evitamos que el hijo termine
-				//read(fd_tuberia_del_padre_al_hijo[0], buf_hijo_recepcion, 1024);
 				aleatorio=rand() % 11; // Devuelve un número aleatorio entre 0 y N, donde N+1=11
-				//aleatorio=rand() % (N-M+1) + M; // Devuelve un número aleatorio entre M y N
 				sprintf(buf_hijo_envio, "%i", aleatorio);// Limpia lo que hemos recibido por stdin quitando saltos de linea y redimensionando el indice maximo del string
 				strcspn(buf_hijo_envio, "\r\n");
 				//printf("Hijo: buf_hijo_envio= %s\n", buf_hijo_envio);
@@ -194,8 +189,8 @@ int main (int argc, char *argv[], char *envp[]){
 			}
 
 		}else{ // ESTAMOS EN EL PADRE
+			//printf("Estoy en el Padre\n");
 			signal(SIGUSR2,manejador_padre);
-			//close(fd_tuberia_del_padre_al_hijo[0]);// A través de este Pipe con flujo de datos Padre---->>Hijo el padre solo escribe, no lee. Cierro fd_tph[0].
 			close(fd_tuberia_del_hijo_al_padre[1]);// A través de este Pipe con flujo de datos Padre<<----Hijo el padre solo lee, no escribe. Cierro fd_thp[0].
 			while(fgets(linea, 1024, stdin) != NULL){ // Bucle que no para de leer lineas hasta que pulsamos ctrl+D
 				fflush(stdin);//Limpiamos stdin
@@ -205,9 +200,9 @@ int main (int argc, char *argv[], char *envp[]){
 				printf("%s\n",buf_padre_recepcion);
 
 			}
+			//Salimos de bucle while pulsando (Ctrl + D)(Fin de Archivo)
 			kill(pid_fork,SIGUSR1); //Enviamos una señal al hijo para que muera
 			wait(NULL);
-			//printf("El hijo ha terminado\n");
 			close(fd_tuberia_del_hijo_al_padre[1]);//Cerramos los Pipe's antes de abandonar el programa
 			printf("(Ctrl+D) (Fin de Archivo)\n");
 			exit (0);
@@ -222,7 +217,7 @@ int main (int argc, char *argv[], char *envp[]){
 			// close(): cierra un FILE
 			// fgets(): lee de un FILE
 			// fputs(): escribe en un FILE
-			// fflush(): sirve para borrar el FILE stdin y ¿stdout?
+			// fflush(): sirve para borrar el FILE stdin
 			// rand(3): rand(void), bad rambom number generator
 		    // srand(3): srand(unsigned seed),bad rambom number generator
 			// sptrinf(): pasa de int a string

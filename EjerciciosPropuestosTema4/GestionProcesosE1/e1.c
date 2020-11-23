@@ -23,11 +23,9 @@
 //LIBRERÍAS ESTANDAR DE C (entre < >). YA PREDEFINIDAS EN EL SISTEMA. El compilador toma el código que hay en stdio.h y lo pega en el Fichero.c donde hayamos hecho el '#include'
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <unistd.h>
-
+#include <stdlib.h> //¿Dentro de la Libreria stdlib.h, está incluida la Libreria unistd.h?
+//#include <unistd.h> // Aunque haciendo man execvp(3) y man fork(2) me dice que debo usar esta Libreria, si la quito sigue funcionando.
+#include <sys/errno.h>
 //LIBRERÍAS PROPIAS (entre " ")
 //#include "lireria.h"
 
@@ -66,20 +64,24 @@ int main (int argc, char *argv[], char *envp[]){
 	//	Nota 3: NULL es una constante. var=NULL ==> if(!var) ==>0
 	//  Nota 4: Violaciónes de Segmento típicas: Tipo 1: intentar acceder a un Apuntador que esta apuntando a NULL
 	//						 					 Tipo 2: intentar indexar un vector o array en una posición que no existe
-
+		printf("------------------------------------------------------\n");
 		printf("EMPIEZA EL PROGRAMA\n");
+		printf("------------------------------------------------------\n");
 
-// ZONA DE DECLARACION DE VARIABLES GLOBALES
+
+// ZONA DE DECLARACION DE VARIABLES LOCALES DE LA FUNCIÓN MAIN
 		int i;
 		int status;
 		int exit_status;
-		char *lista[argc];
-		char *lista_aux;
+		char **argumento_execvp;// DECLARO una variable de tipo char apuntador doble
 		pid_t pid_fork;
 
+// FIN ZONA DE DECLARACION DE VARIABLES
+//------------------------------------
+// ZONA DE INICIALIZACIÓN DE VARIABLES
 
 
-// FIN ZONA DE DECLARACION DE VARIABLES GLOBALES
+// FIN ZONA DE INICIALIZACIÓN DE VARIABLES
 //------------------------------------
 // ZONA DE PARSEO (Parsear Mandato = Tokenizar Mandato)
 
@@ -110,6 +112,7 @@ int main (int argc, char *argv[], char *envp[]){
 
 
 		printf("Tokenizamos el Mandato:\n");
+		printf("\n");
 		printf("--> Se han recibido %i Argumento/s:\n",argc-1);
 		for ( i=0; i<argc;i=i+1){
 			if(i==0){
@@ -124,55 +127,68 @@ int main (int argc, char *argv[], char *envp[]){
 //----------------------------------
 // ZONA DE CONTROL ERRORES ARGUMENTOS
 		if(argc==1){ //Hemos recibido 0 Argumentos:
-			printf("usage: e1: mandato [-Opcion 1] ... [-Opcion n]");
+			printf("usage: %s: mandato [-Arg 1] ... [-Arg n]", argv[0]);
 			return 1;
 		}
-		if(argc==2){ //Hemos recibido 1 Argumento:
-			/*printf("Error nombre_programa: explicación error: %s\n",argv[1]);
-			return 2;	*/
-		}
-		if(argc==3){//Hemos recibido 2 Argumentos:
-			/*printf("Error nombre_programa: explicación error: %s\n",argv[1]);
-			return 3;	*/
-		}
-		if(argc > 3){//Hemos recibido más de 3 Argumentos:
 
-		}
 
 // FIN DE CONTROL ERRORES ARGUMENTOS
 //---------------------------------
 // EMPIEZA FUNCIONALIDAD PROGRAMA
 
 
-		pid_fork = fork();
+		pid_fork = fork(); // Creamos el Proceso Hijo
 
 		if(pid_fork<0){
 			fprintf(stderr,"error: creando el hijo mediante la Lamada al Sistema fork()");
 			exit (-1);
 		}else if(pid_fork==0){ //Proceso Hijo
-			printf("Soy el Hijo\n");
-			for (i=1;i<argc;i++){
-				lista_aux=argv[i];
-				lista[i-1]=lista_aux;
-			}
-			lista[argc-1]= 0;
-			for (i=0;i<argc;i++){
-				printf("lista[%i]= %s\n",i,lista[i]);
-			}
-			execvp(lista[0],lista);
-			exit(1);
+			//OPCIÓN 1: Haciendo uso de apuntador doble auxiliar para construir la lista que le pasaremos como argumento a execvp(3)
+				//Inicializo la variable **argumento_execvp mediante la Técnica de Reserva de Memoria Dinámica haciendo uso de malloc(3)
+					argumento_execvp=(char**)malloc((argc-1)*sizeof(char*)); //Reservo memoria de forma Dinámica para las filas
+					if(argumento_execvp==NULL){//Control error malloc(3)
+						printf("Error: haciendo uso de malloc(3)");
+						exit (2);
+					}
+
+					for(i=0;i<argc-1;i++){
+						argumento_execvp[i]=(char*)malloc(strlen(argv[i+1])*sizeof(char));////Reservo memoria de forma Dinámica para las columnas de cada una de las filas
+						if(argumento_execvp[i]==NULL){//Control error malloc(3)
+							printf("Error: haciendo uso de malloc(3)");
+							exit (2);
+						}
+					}
+
+
+					//Creo el argumento_execvp que se le pasa como Argumento a la Función de Biblioteca execvp(3)
+					for (i=1;i<argc;i++){
+						argumento_execvp[i-1]=argv[i];
+					}
+					argumento_execvp[argc-1]= 0;
+					execvp(argumento_execvp[0],argumento_execvp);
+
+
+				//OPCIÓN 2: Aprovechando que ya tengo en la veriable argv lo que necesito para pasarle cómo argumento a execvp(3) salvo porque al final debo añadir un NULL, añado el NULL al final de argv.
+					/*strcpy(&argv[argc],"\0");
+					execvp(argv[0],argv+1);*/
+
+			printf("Error al ejecutar el comando\n");
+			printf("%s\n",strerror(errno));
+			exit(errno);
 
 		}else{//Proceso Padre
-			printf("Soy el Padre\n");
 			waitpid(pid_fork,&status,0);
-			printf("Soy el Padre\n");
 			if(WIFEXITED(status) != 0){
-				exit_status= WEXITSTATUS(status);
-				printf("Error al ejecutar el comando\n");
-				//FALTA IMPRIMIR LO QUE DEVUELVE EXECVP
-				printf("%s\n",strerror(exit_status));
-				printf("El comando no se ejecuto correctamente\n");
+				if(WEXITSTATUS(status) != 0){
+					exit_status= WEXITSTATUS(status);
+					printf("El comando no se ejecuto correctamente\n");
+				}
 			}
+			//Liberamos Memoria Dinámica. Sólo en la Opción 1
+			for(i=0;i<argc-1;i++){
+				free(argumento_execvp[i]);
+			}
+			free(argumento_execvp);
 			exit(0);
 
 		}
