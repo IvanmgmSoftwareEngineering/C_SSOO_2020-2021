@@ -1,13 +1,10 @@
-/* TÍTULO: prueba.c
+/* TÍTULO: e5.c
  * AUTOR:  Iván Martín Gómez
- * FECHA:  Sun Nov 22 20:59:58 CET 2020
+ * FECHA:  Wed Nov 25 13:13:00 CET 2020
  *
- * Sintaxis: nombre_programa Argumento1 [Argumento2] ... [Argumento_n-1 [Argumento_n]]
+ * Sintaxis: e5 Argumento1 [Argumento2] ... [Argumento_n-1 [Argumento_n]]
  *
- * Argumentos Entrada: (los que están entre [] son opcionales)
- * 		Argumento 1:    -->
- * 		Argumento 2: [] -->
- * 		Argumento n: [] -->
+ * Argumentos Entrada:
  *
  * Salida:
  *
@@ -21,159 +18,65 @@
  *
  */
 //----------------------------------------------------------------------------
-//LIBRERÍAS ESTANDAR DE C (entre < >). YA PREDEFINIDAS EN EL SISTEMA. El compilador toma el código que hay en stdio.h y lo pega en el Fichero.c donde hayamos hecho el '#include'
+//LIBRERÍAS ESTANDAR DE C
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h> // para Llamada al Sistema fork(2)
-#include <signal.h> // para Función de Biblioteca signal(3)
-
-//LIBRERÍAS PROPIAS (entre " ")
-//#include "lireria.h"
-//Cuando queremos agregar una Librería con extension .a utilizar manual INSTRUCCIONES_ECLIPSE.rtf situado en el Directorio WORKFLOWProgramacion
-
-
-//ALGUNAS SECCIONES DEL MANUAL QUE ES CONVENIENTE SABER:
-// Para consultar el Manual hacer: man 
-//  	Sección (1)Mandatos,
-//	Sección (2)Llamadas al Sistema,
-//	Sección (3)Funciones de Biblioteca
+#include <string.h>
+#include <unistd.h> // para Llamada al Sistema fork()
+#include <signal.h> // para Llamada al Sistema signal()
+#include <sys/types.h>
 
 
 // CABECERAS FUNCIONES UTILIZADAS DENTRO DE MAIN
 	// CABECERA FUNCION 1: Manejo señales Procesos
-		//void manejador_padre(int signal);
-	// FIN CABECERA FUNCION 1
-	//---------------------------------
+		void manejador_padre(int signal);
 	// CABECERA FUNCION 2: Manejo señales Procesos
 		void manejador_hijo_1(int signal);
-	// FIN CABECERA FUNCION 2
-	//---------------------------------
 	// CABECERA FUNCION 3: Manejo señales Procesos
 		void manejador_hijo_2(int signal);
-	// FIN CABECERA FUNCION 3
-	//---------------------------------
-	// CABECERA FUNCION 4: Manejo señales Procesos
-		void manejador_hijo_3(int signal);
-	// FIN CABECERA FUNCION 4
-	//---------------------------------
-	// CABECERA FUNCION 5: Manejo señales Procesos
-		void manejador_hijo_4(int signal);
-	// FIN CABECERA FUNCION 5
-	//---------------------------------
+
 // FIN CABECERAS FUNCIONES UTILIZADAS DENTRO DE MAIN
 //---------------------------------
 
 // ZONA DECLARACION VARIABLE GLOBALES (fuera de la función main())
-	 //nota: La función main() aún siendo una función especial por ser la función de entrada y de salida del programa,
-         //	 es una función más, por lo que las variables declaradas dentro de la función main() serán variables  
-	 // 	 locales a la función main(), es decir, no serán accesibles desde funciones externas a la función main().
-	 // 	 Si queremos tener acceso a una variable desde cualquier función, debemos declararla aquí.
-	 //	 Este comentario es útil para:
-	 //		- Funciones manejadoras de señales; utilizan pid_fork
-	 //	 	- Funciones que devuelven una variable de tipo apuntador; se debe hacer copia antes de hacer return
-
-int vector_PIDs[5]; //Declaramos e Inicializamos de forma estática la Variable de tipo vector, Global para almacenar lo que devuelven las Llamadas al Sistema fork(2). Esto nos permitirá conocer los PIDs entre Procesos que son Hermanos. Se pone aquí fuera porque esta variable para que pueda ser consultada desde las funciones manejadoras() de señales que están fuera del main()
-					  //vector_PIDs[0]= guardamos PID único del padre
-					  //vector_PIDs[1]= guardamos PID único del Hijo1
-					  //vector_PIDs[2]= guardamos PID único del Hijo2
-					  //vector_PIDs[3]= guardamos PID único del Hijo3
-					  //vector_PIDs[4]= guardamos PID único del Hijo4
-pid_t pid1_fork; // Variable global para tratar lo que devuelve la Llamada al Sistema fork(2). Se pone aquí fuera porque esta variable para que pueda ser consultada desde las funciones manejadoras() de señales que están fuera del main()
-pid_t pid2_fork; // Variable global para tratar lo que devuelve la Llamada al Sistema fork(2). Se pone aquí fuera porque esta variable para que pueda ser consultada desde las funciones manejadoras() de señales que están fuera del main()
-pid_t pid3_fork; // Variable global para tratar lo que devuelve la Llamada al Sistema fork(2). Se pone aquí fuera porque esta variable para que pueda ser consultada desde las funciones manejadoras() de señales que están fuera del main()
-pid_t pid4_fork; // Variable global para tratar lo que devuelve la Llamada al Sistema fork(2). Se pone aquí fuera porque esta variable para que pueda ser consultada desde las funciones manejadoras() de señales que están fuera del main()
-
-
+pid_t vector_PIDs[3]; // Variable de tipo vector, Global para almacenar lo que devuelven las Llamadas al Sistema fork(2). Esto nos permitirá conocer los PIDs entre Procesos que son Hermanos. Se pone aquí fuera porque esta variable para que pueda ser consultada desde las funciones manejadoras() de señales que están fuera del main()
+pid_t PID_unico_padre;
+pid_t PID_unico_hijo1;
+pid_t PID_unico_hijo2;
+int fd_tuberia_del_padre_al_hijo1[2]; // GLOBAL PORQUE SE GESTIONA EN función fuera del main() (manejadora de señales)
+int fd_tuberia_del_padre_al_hijo2[2]; // GLOBAL PORQUE SE GESTIONA EN función fuera del main() (manejadora de señales)
+int fd_tuberia_del_hijo1_al_hijo2[2]; // GLOBAL PORQUE SE GESTIONA EN función fuera del main() (manejadora de señales)
 // FIN ZONA DECLARACION VARIABLE GLOBALES
 //---------------------------------
 // EMPIEZA FUNCION MAIN
-int main (int argc, char *argv[]){
+int main (int argc, char *argv[], char *envp[]){
 
-	//Notas :
-	//	Nota 1: **argv=*argv[]=argv[][]
-	// 	Nota 2: true=1, false =0
-	//	Nota 3: NULL es una constante. var=NULL ==> if(!var) ==>0
-	//  	Nota 4: Violaciones de Segmento típicas: una Violación de Segmento se produce cuando intentamos acceder a una zona de memoria a la que no tenemos derecho 
-	//						 Tipo 1: intentar acceder a un Apuntador que esta apuntando a NULL
-	//						 Tipo 2: intentar indexar un vector o array en una posición que no existe
-	//  	Nota 5: Toda variable se deben DECLARAR y INICIALIZAR
-	//		Destacamos la Declaración e Inicialización de las variables de tipo Apuntador (el uso de los Apuntadores es una de las característica más relevantes que distingue al Lenguaje de Programación C de otros Lenguajes de Programación de más alto nivel
-	//				Declaración: (char *linea ó char linea[]) (Vector) ó (char **lista_lineas ó char lista_lineas[][]) (Matriz) 
-	//				             (int *numeros ó int numeros[]) (Vector) ó (int **lista_numeros ó int lista_numeros[][]) (Matriz)
-        //			                Inicialización: (3 posibles formas):
-	//					- FORMA 1: de forma explícita. linea =['a' 'b' 'c' 'd'] 
-	//					- FORMA 2: Asignación Memoria Estática. char *linea [1024]. Esta forma de hacerlo implica hacer la Inicialización en la misma línea que la Declaración 
-	//					- FORMA 3: Asignación Memoria Estática. Mediante uso de malloc(3)
-	//					  (nota): Cuando asignamos Memoria, ya sea de forma Estática o de forma Dinámica, estamos Inicializando la variable de tipo apuntador, esto se debe que en ese momento la variable apuntador empieza apuntar a una zona de memoria, hasta el momento de la Inicialización, la variable de tipo Apuntador no apuntaba a ninguna parte.
-
-	//	Nota 6: No confundir Reserva de Memoria Dinámica con Reserva de Memoria Estática.
-
-	//		--> Reserva de Memoria ESTÁTICA: se utiliza cuando SI conocemos el tamaño de memoria que vamos a reservar en tiempo de COMPILACIÓN
-	//						Ejemplo: *char[argc] No es una asignación de Memoria Estática ya que el valor de argh no lo conocemos en tiempo de Compilación. Aunque C permita hacerlo esto está mal.
-	//		--> Reserva de Memoria DINÁMICA: se utiliza cuando NO conocemos el tamaño de memoria que vamos a reservar en tiempo de COMPILACIÓN, pero SI lo conocemos en tiempo de EJECUCIÓN
-
-
-
-	//	Nota 7:
-printf("---------------------\n");
+printf("------------------\n");
 printf("EMPIEZA EL PROGRAMA\n");
 
 // ZONA DE DECLARACION DE VARIABLES LOCALES FUNCIÓN MAIN()
-	int i;
+		int i;
+		char envio_datos_hijo1[4096]; // Esta variable de tipo apuntador está Declarada e Inicializada Mediante la Técnica de Reserva de Memoria Estática.
+		char recepcion_datos_hijo2[4096];
+		char mandato1[100]="ls -la";
+		char mandato2[100]="tr \"d\" \"D\"";
+		char linea[200]="ls -la |tr \"d\" \"D\"";
+		pid_t pid1_fork;// Lo que devuelve la Llamada al Sistema fork() no es un int (aunque lo parezca), si no una variable de tipo pid_t. Lo que tiene de especial la variable de tipo pid_t, es que la variable pid_t cambia su valor dependiendo de cuál sea el Proceso desde el que la estamos consultando
+		pid_t pid2_fork;
+
 
 // FIN ZONA DE DECLARACION DE VARIABLES LOCALES FUNCIÓN MAIN()
 //------------------------------------
-// ZONA DE PARSEO (Parsear Mandato = Tokenizar Mandato)
-
-//		- Un token es un elemento atómico
-
-//		- Tokenizar consiste en dividir un String en
-//		  varios Tokens separados por un delimitador
-
-//		- Un tokens debe cumplir con una Gramática y para comprobar que
-//		  un Token pertenece a un cierto Lenguaje es necesario utilizar un
-//		  analizador Léxico (¿Quizás relacionado con AFD y AFN: Asignatura LenguajesFormales)?)
-
-//		- Hay una Función de Biblioteca strtok(3) que es muy útil para tokenizar.
-//			char *str;
-//			char *token;
-//			str = PATH; PATH=string_1:string_2:...:string_n
-//			token=strtok(str,:);  Almacena en 'token' string_1
-//			token=strtok(NULL,:); Almacena en 'token' string_2. Lo que pasa aquí es que 
-//					       el Indicador de Posición se ha quedado en el primer ':' después 
-//					       de llamar por primera vez a strtok(), y con NULL le indicamos
-//					       que se fije donde está apuntando el Indicador de Posición.
-
-//			if(token==NULL);       Si token=NULL significa que hemos llegado al final de lo que contiene str, es decir,
-//					       al final de lo que contiene la variable PATH. No confundir este
-//					       NULL que devuelve la Función strtok(), con el NULL de antes que le pasamos como
-//					       Argumento de entrada a la función strtok().
-
-
-
-		printf("Tokenizamos el Mandato:\n");
-		printf("--> Se han recibido %i Argumento/s:\n",argc-1);
-		for ( i=0; i<argc;i=i+1){
-			if(i==0){
-				printf("---- El nombre del mandato es: %s\n",argv[0]);
-			}else{
-				printf("---- Argumento %i:             %s\n",i,argv[i]);
-			}
-		}
-		printf("------------------------------------------------------\n");
-		printf("\n");
-// FIN ZONA DE PARSEO
-//----------------------------------
 // ZONA DE CONTROL ERRORES ARGUMENTOS
-		if(argc>1){ //Hemos recibido 1 Argumento o más:
-			printf("usage: %s \n",argv[0]);
+		if(argc>1){ //Hemos recibido 1 Argumento ó más:
+			printf("usage: %s\n",argv[0]);
 			return 1;
 		}
-
 
 // FIN DE CONTROL ERRORES ARGUMENTOS
 //---------------------------------
 // EMPIEZA FUNCIONALIDAD PROGRAMA
+
 
 		//ZONA DE PROCESOS
 
@@ -290,7 +193,7 @@ printf("EMPIEZA EL PROGRAMA\n");
 
 //------------>Matar a un Proceso: Utilizamos Mandato exit(1): esta es la única manera de poner un proceso en estado Terminado (muerto)
 
-			  //			Recordar siempre: "Un buen padre espera por sus hijos". Esta frase es importante tenerla en cuanta para
+			  //			Recordar siempre: "Todo buen padre espera por sus hijos". Esta frase es importante tenerla en cuanta para
 
 			  //					   que ningún hijo se quede en esta 'Zombie' \<defunct\>, es decir, si un padre muere antes que su hijo, el hijo se queda en estado 'Zombie'.
 
@@ -350,116 +253,138 @@ printf("EMPIEZA EL PROGRAMA\n");
 //						-Paso 8: Haciendo uso de dup() o dup2(). Cada Hijo deberá, antes de utilizar execvp(3), redirigir la Salida Estándar Error hacia el pipe de escritura 
 //						-Paso 9: Cada hermano ejecutará un único mandato (junto con sus argumentos) haciendo uso de execvp(3)
 
+		//IDEAS CLAVE DEL EJERCICIO:
+		//	Idea 1: execvp(3) solo acepta cómo argumentos un único mandato (junto con sus argumentos)
+		//	Idea 2: Usamos dup(2) ó duo2(2) para redirigir la Salida Estándar del Hijo1 que hace execvp(3) del primer mandato de la línea(visto de iquierda a derecha) a la Entrada Estandar del Hijo2 que hace execvp(3) del segundo mandato de la línea
+		//	Idea 3: Misma idea que en E4. Almaceno en una variable Global vector los PIDs únicos de los Hijos para que entre ellos puedan enviarse señales, y así por ejemplo un hijo pueda sacar a otro del estado de pause.
+		//	Idea 4: Varias Tuberias para comunicar procesos:
+		//			Tuberia 1: Padre-->Hijo1, envio de mandato1
+		//			Tuberia 2: Padre-->Hijo2, envio de mandato2
+		//			Tuberia 3: Hijo1-->Hijo2, envio de Salida Estandar de execvp(3) del Hijo 1 a la Entrada Estandar de execvp(3) del Hijo2
+		//------------>Estructura básica para saber en que proceso estamos
+				printf("Queremos Ejecutar la línea: %s\n",linea);
+				printf("Tokenizamos línea... \n");
+				printf("Mandato 1 = %s \n",mandato1);
+				printf("Mandato 2 = %s \n",mandato2);
 
-						vector_PIDs[0]=getpid();//Guardamos el PID único del Padre en la variable Global vector_PIDs
-						pid1_fork=fork();// Creamos Hijo 1
-						if(pid1_fork<0){// ERROR AL HACER EL primer fork()
-							printf("Error: al hacer el primer fork()");
-						}else if(pid1_fork==0){// ESTAMOS EN EL HIJO 1
-							signal(SIGUSR1,manejador_hijo_1);
-							pause();// El Hijo 1 se queda a la espera de recibir una señal por parte del Hijo 2 para que salga del pause y empiece a correr.
-							printf("Soy el Hijo 1 (pid=%i), corriendo...\n",getpid());
-							sleep(2);
-							printf("Termine!\n");
-							exit(0); // Termina Proceso 1
+				pipe(fd_tuberia_del_padre_al_hijo1); // Padre-->Hijo1.Tubería para comunicación entre el Padre y el Hijo 1. Para el envio del mandato 1 desde el Padre al Hijo 1
+				pipe(fd_tuberia_del_padre_al_hijo2); // Hijo1-->Hijo2.Tubería para comunicación entre el Padre y el Hijo 2. Para el envio del mandato 2 desde el Padre al Hijo 1
+				pipe(fd_tuberia_del_hijo1_al_hijo2); // Hijo1-->Hijo2.Tubería para comunicación entre el Hijo 1 y el Hijo 2. Para el envio de Salida Estandar de execvp(3) del Hijo 1 a la Entrada Estandar de execvp(3) del Hijo2
+				pid1_fork=fork();
 
-						}else if (pid1_fork>0){
-							vector_PIDs[1]=pid1_fork; //El padre debe tener almacenado en su variable vector_PIDs definida de forma Global, los valores de los PIDs únicos de los hijos creados previamente. Este paso es muy importante, ya que si no lo hacemos, al hecer fork(2) en la siguiente linea el Proceso Hijo 2 no dispondra de los PIDs de sus hermanos
-							pid2_fork=fork();// Creamos Hijo 2
-							if(pid2_fork<0){// ERROR AL HACER EL segundo fork()
-								printf("Error: al hacer el segundo fork()\n");
-							}else if(pid2_fork==0){// ESTAMOS EN EL HIJO 2
-								signal(SIGUSR1,manejador_hijo_2);
-								pause(); // El Hijo 2 se queda a la espera de recibir una señal por parte del Hijo 3.
-								printf("Soy el Hijo 2 (pid=%i), corriendo...\n",getpid());
-								sleep(2);
-								printf("Termine! Paso el testigo al Hijo 1 (pid=%i)\n",vector_PIDs[1]);
-								kill(vector_PIDs[1],SIGUSR1);//Envio señal al Hijo 1 para que salga del pause y empiece a correr
-								exit(0);// El Hijo 2 termina
-							}else if (pid2_fork>0){
-								vector_PIDs[2]=pid2_fork;//El padre debe tener almacenado en su variable vector_PIDs definida de forma Global, los valores de los PIDs únicos de los hijos creados previamente. Este paso es muy importante, ya que si no lo hacemos, al hecer fork(2) en la siguiente linea el Proceso Hijo 3 no dispondra de los PIDs de sus hermanos
-								pid3_fork=fork();// Creamos Hijo 3
-								if(pid3_fork<0){// ERROR AL HACER EL tercer fork()
-									printf("Error: al hacer el segundo fork()\n");
-								}else if(pid3_fork==0){// ESTAMOS EN EL HIJO 3
-									signal(SIGUSR1,manejador_hijo_3);
-									pause();// El Hijo 3 se queda a la espera de recibir una señal por parte del Hijo 4.
-									printf("Soy el Hijo 3 (pid=%i), corriendo...\n",getpid());
-									sleep(2);
-									printf("Termine! Paso el testigo al Hijo 2 (pid=%i)\n",vector_PIDs[2]);
-									kill(vector_PIDs[2],SIGUSR1);//Envio señal al Hijo 2 para que salga del pause y empiece a correr
-									exit(0);// El Hijo 3 termina
-								}else if (pid3_fork>0){
-									vector_PIDs[3]=pid3_fork;//El padre debe tener almacenado en su variable vector_PIDs definida de forma Global, los valores de los PIDs únicos de los hijos creados previamente. Este paso es muy importante, ya que si no lo hacemos, al hecer fork(2) en la siguiente linea el Proceso Hijo 4 no dispondra de los PIDs de sus hermanos
-									pid4_fork=fork();// Creamos hijo 4
-									if(pid4_fork<0){// ERROR AL HACER EL cuarto fork()
-										printf("Error: al hacer el cuarto fork()\n");
-									}else if(pid4_fork==0){// ESTAMOS EN EL HIJO 4
-										signal(SIGUSR1,manejador_hijo_4);
-										pause(); // El Hijo 1 se queda a la espera de recibir una señal por parte del Padre.
-										printf("Soy el Hijo 4 (pid=%i), corriendo...\n",getpid());
-										sleep(2);
-										printf("Termine! Paso el testigo al Hijo 3 (pid=%i)\n",vector_PIDs[3]);
-										kill(vector_PIDs[3],SIGUSR1);//Envio señal al Hijo 3 para que salga del pause y empiece a correr
-										exit(0);// El Hijo 4 termina
+				if(pid1_fork<0){ // ERROR AL HACER EL primer fork()
+					printf("Error: al hacer el primer fork()");
+				}else if(pid1_fork==0){// ESTAMOS EN EL HIJO 1
+					signal(SIGUSR1,manejador_hijo_1);
+					//signal(SIGINT,manejador_hijo_1);
+					//vector_PIDs[1]=getpid();
+					//printf("Hijo 1 ==> vector_PIDs[1]=%i\n",vector_PIDs[1]);
+					PID_unico_hijo1=getpid();
+					printf("Hijo 1 ==> PID_unico_hijo1=%i\n",PID_unico_hijo1);
+					printf("Hijo 1 ==> PID_unico_Padre_hijo1=%i\n",getppid());
+					/*close(fd_tuberia_del_padre_al_hijo2[0]);//Padre---->>Hijo2.El Hijo 1 no escribe en esta tubería
+					close(fd_tuberia_del_padre_al_hijo2[1]);//Padre---->>Hijo2.El Hijo 1 no lee en esta tubería
+					close(fd_tuberia_del_padre_al_hijo1[1]);//Padre---->>Hijo1. El Hijo 1 solo lee, no escribe, en esta tubería. Cierro fd_tph2[1] desde el Hijo 1.
+					close(fd_tuberia_del_hijo1_al_hijo2[0]);//Hijo1---->>Hijo2. El Hijo 1 solo escribe, no lee, en esta tubería. Cierro fd_th1h2[0] desde el Hijo 1.
+					*/printf("El Hijo 1 se queda en pause\n");
+					pause();//Ponemos al Hijo 1 en estado de pause, en espera de recibir una señal por parte del Padre
+					sleep(2);
+					printf("El Hijo 1 sale del pause\n");
+					printf("El Hijo 1 duerme durante dos segundos\n");
+					sleep(2);
+					printf("El Hijo 1 envia una señal al Hijo 2 para que salga del pause\n");
+					kill(PID_unico_hijo2,SIGUSR1); //El Hijo 1 envia una señal al Hijo 2 para que salga del pause.
+					printf("El Hijo 1 muere\n");
+					exit(0);
+				}else if (pid1_fork>0){// ESTAMOS EN EL PADRE
+					pid2_fork=fork();
+					if(pid2_fork<0){// ERROR AL HACER EL segundo fork()
+						printf("Error: al hacer el segundo fork()");
+					}else if(pid2_fork==0){// ESTAMOS EN EL HIJO 2
+						signal(SIGUSR1,manejador_hijo_2);
+						//signal(SIGINT,manejador_hijo_2);
+						//vector_PIDs[2]=getpid();
+						//printf("Hijo 2 ==> vector_PIDs[2]=%i\n",vector_PIDs[2]);
+						PID_unico_hijo2=getpid();
+						printf("Hijo 2 ==> PID_unico_hijo2=%i\n",PID_unico_hijo2);
+						printf("Hijo 2 ==> PID_unico_Padre_hijo2=%i\n",getppid());
+						/*close(fd_tuberia_del_padre_al_hijo1[0]);//Padre---->>Hijo1.El Hijo 2 no escribe en esta tubería
+						close(fd_tuberia_del_padre_al_hijo1[1]);//Padre---->>Hijo1.El Hijo 2 no lee en esta tubería
+						close(fd_tuberia_del_padre_al_hijo2[1]);//Padre---->>Hijo2. El Hijo 2 solo lee, no escribe, en esta tubería. Cierro fd_tph2[1] desde el Hijo 2.
+						close(fd_tuberia_del_hijo1_al_hijo2[1]);//Hijo1---->>Hijo2. El Hijo 2 solo lee, no escribe, en esta tubería. Cierro fd_th1h2[1] desde el Hijo 2.
+						*/printf("El Hijo 2 se queda en pause\n");
+						pause(); //Ponemos al Hijo 2 en estado de pause, en espera de recibir una señal por parte del Padre
+						printf("El Hijo 2 sale del pause\n");
+						printf("El Hijo 2 duerme durante dos segundos\n");
+						sleep(2);
+						/*printf("El Hijo 2 envia una señal al Hijo 1 para que salga del pause\n");
+						kill(PID_unico_hijo1,SIGUSR1); //El Hijo 1 envia una señal al Hijo 2 para que salga del pause.
+						*/printf("El Hijo 2 muere\n");
+						exit(0);
+					}else if(pid2_fork>0){// ESTAMOS EN EL PADRE
+						//vector_PIDs[0]=getpid();
+						//printf("Padre ==> vector_PIDs[0]=%i\n",vector_PIDs[0]);
+						printf("Padre-->pid1_fork=%i; visto desde el Padre deberia ser el mismo que el PID unico del hijo 1\n",pid1_fork);
+						printf("Padre-->pid2_fork=%i; visto desde el Padre deberia ser el mismo que el PID unico del hijo 2\n",pid2_fork);
+						PID_unico_padre=getpid();
+						printf("Padre ==> PID_unico_padre=%i\n",PID_unico_padre);
+						/*close(fd_tuberia_del_padre_al_hijo1[0]);//Padre---->>Hijo1. El Padre solo escribe, no lee en esta tubería. Cierro fd_tph1[0] desde el Padre.
+						close(fd_tuberia_del_padre_al_hijo2[0]);//Padre---->>Hijo2. El Padre solo escribe, no lee en esta tubería. Cierro fd_tph2[0] desde el Padre.
+						close(fd_tuberia_del_hijo1_al_hijo2[0]);// El Padre no escribe en esta tuberia
+						close(fd_tuberia_del_hijo1_al_hijo2[1]);// El Padre no lee en esta Tuberia
+						*/printf("El Padre se duerme durante dos segundos\n");
+						sleep(2);
+						printf("-----------------\n");
+						printf("El Padre se despierta\n");
+						printf("El Padre envia una señal al Hijo 1 para que salga del pause\n");
+						kill(PID_unico_hijo1,SIGUSR1); //Enviamos señal al Hijo 1 para que salga del pause(3)
+						printf("El Padre hace un waitpid(1) en espera de que el Hijo 2 muera\n");
+						waitpid(PID_unico_hijo2,NULL,0);//Esperamos a que muera el Hijo 2 para salir del wait(1)
+						printf("El Padre sale del wait después de que el Hijo 2 haya muerto\n");
+						printf("El Padre muere\n");
+						exit(0); //El proceso Padre muere
+					}
+				}
 
-									}else if (pid4_fork>0){// ESTAMOS EN EL PADRE
-										vector_PIDs[4]=pid4_fork;
-										printf("Todos los hijos creados.\n");
-										printf("Doy la salida!\n");
-										sleep(2);
-										kill(vector_PIDs[4],SIGUSR1);//Enviamos señal al Hijo 1 para que empiece a correr
-										waitpid(vector_PIDs[4],NULL,0);//El padre esperará por el Hijo 4
-										waitpid(vector_PIDs[3],NULL,0);//El padre esperará por el Hijo 3
-										waitpid(vector_PIDs[2],NULL,0);//El padre esperará por el Hijo 2
-										waitpid(vector_PIDs[1],NULL,0);//El padre esperará por el Hijo 1
-										printf("Todos los hijos terminaron.\n");
-										exit(0);
-									}
-								}
-							}
-						}
+				//Dudas:
+				//	duda1: se me muestra el prompt en alguna parte
+				//	duda2: al enviar con kill una señal dirigida a un proceso determinado, esta señal es recogida por ambos procesos
+				//	duda3: no se muestra el printf(1) que en el padre a continuación del kill
 //---------------------------------
 }// FIN FUNCIÓN MAIN
 //---------------------------------
 // IMPLEMENTACIONES FUNCIONES CUYAS CABECERAS ESTAN DEFINIDAS AL PRINCIPIO DE ESTE DOCUMENTO Y QUE SON UTILIZADAS DENTRO DE MAIN
+	//IMPLEMENTACION FUNCION 1
+		void manejador_padre(int signal){
+			if(signal == SIGINT){
+				printf("Señal=%i recibida en el Padre\n",signal);
+			}else if(signal ==SIGUSR1){
+				printf("Señal=%i recibida en el Padre\n",signal);
+			}else if(signal ==SIGUSR2){
+				printf("Señal=%i recibida en el Padre\n",signal);
+			}
+		}
 
-//IMPLEMENTACION FUNCION 1
-
-	//FIN IMPLEMENTACION FUNCION 1
-	//---------------------------------
 	//IMPLEMENTACION FUNCION 2
 		void manejador_hijo_1(int signal){
-			 if(signal ==SIGUSR1){
-				 //No hace nada, sólo queremos que el Hijo 1 salga del primer pause(3) y empiece a correr
+			if(signal == SIGINT){
+				printf("Señal=%i recibida en el Hijo 1\n",signal);
+			}else if(signal ==SIGUSR1){
+				printf("Señal=%i recibida en el Hijo 1\n",signal);
+			}else if(signal ==SIGUSR2){
+				printf("Señal=%i recibida en el Hijo 1\n",signal);
 			}
 		}
-	//FIN IMPLEMENTACION FUNCION 2
-	//---------------------------------
+
 	//IMPLEMENTACION FUNCION 3
 		void manejador_hijo_2(int signal){
-			if(signal ==SIGUSR1){
-				 //No hace nada, sólo queremos que el Hijo 2 salga del pause(3) y empiece a correr
+			if(signal == SIGINT){
+				printf("Señal=%i recibida en el Hijo 2\n",signal);
+			}else if(signal ==SIGUSR1){
+				printf("Señal=%i recibida en el Hijo 2\n",signal);
+			}else if(signal ==SIGUSR2){
+				printf("Señal=%i recibida en el Hijo 2\n",signal);
 			}
 		}
-	//FIN IMPLEMENTACION FUNCION 3
-	//---------------------------------
-	//IMPLEMENTACION FUNCION 4
-		void manejador_hijo_3(int signal){
-			if(signal ==SIGUSR1){
-				 //No hace nada, sólo queremos que el Hijo 3 salga del pause(3) y empiece a correr
-			}
-		}
-	//FIN IMPLEMENTACION FUNCION 4
-	//---------------------------------
-	//IMPLEMENTACION FUNCION 5
-		void manejador_hijo_4(int signal){
-			if(signal ==SIGUSR1){
-				 //No hace nada, sólo queremos que el Hijo 4 salga del pause(3) y empiece a correr
-			}else if (signal ==SIGUSR2){
-				 //No hace nada, sólo queremos que el Hijo 1 salga del segundo pause(3) y muera
-			}
-		}
-	//FIN IMPLEMENTACION FUNCION 5
 
 // FIN IMPLEMENTACIONES FUNCIONES CUYAS CABECERAS ESTAN DEFINIDAS AL PRINCIPIO DE ESTE DOCUMENTO UTILIZADAS DENTRO DE MAIN

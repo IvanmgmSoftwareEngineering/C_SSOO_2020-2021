@@ -172,7 +172,7 @@ int main (int argc, char *argv[], char *envp[]){
 
 		}else if(pid_fork==0){// ESTAMOS EN EL HIJO
 			//printf("Estoy en el Hijo\n");
-			srand (time(NULL)); // Va cambiando la semilla que utiliza la función rand() para generar el número aleatorio (la hora del sistema es diferente cada vez que ejecutemos el programa), si no hiciesemos esto la función rand() siempre devolveria los mismo numeros aleatorio en distintas ejecuaciones, ya que utiliza siempre la misma semilla
+			srand (time(NULL)); // Va cambiando la semilla que utiliza la función rand() para generar el número aleatorio (la hora del sistema es diferente cada vez que ejecutemos el programa), si no hiciesemos esto la función rand() siempre devolveria los mismo numeros aleatorio en distintas ejecuaciones, ya que utiliza siempre la misma semilla. srand(3) sólo será necesario llamarlo una vez en nuestro programa.
 			signal(SIGUSR1,manejador_hijo);
 			signal(SIGUSR2,manejador_hijo);
 			close(fd_tuberia_del_hijo_al_padre[0]);// A través de este Pipe con flujo de datos Padre<<----Hijo el hijo solo escribe, no lee. Cierro fd_thp[1].
