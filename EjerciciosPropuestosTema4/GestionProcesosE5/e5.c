@@ -256,8 +256,13 @@ printf("EMPIEZA EL PROGRAMA\n");
 
 		//IDEAS CLAVE DEL EJERCICIO:
 		//	Idea 1: execvp(3) solo acepta cómo argumentos un único mandato (junto con sus argumentos)
-		//	Idea 2: Usamos dup(2) ó duo2(2) para redirigir la Salida Estándar del Hijo1 que hace execvp(3) del primer mandato de la línea(visto de iquierda a derecha) a la Entrada Estandar del Hijo2 que hace execvp(3) del segundo mandato de la línea
-		//	Idea 3: Misma idea que en E4. Almaceno en una variable Global vector los PIDs únicos de los Hijos para que entre ellos puedan enviarse señales, y así por ejemplo un hijo pueda sacar a otro del estado de pause.
+		//	Idea 2: Usamos dup(2) ó duo2(2) para redirigir la Salida Estándar del Hijo2 que hace execvp(3) del primer mandato de la línea(visto de iquierda a derecha) a la Entrada Estandar del Hijo1 que hace execvp(3) del segundo mandato de la línea
+		//	Idea 3: Misma idea que en E4. Almaceno en una variable Global (NO HACE FALTA QUE SEAN GLOBALES) vector los PIDs únicos de los Hijos para que entre ellos puedan enviarse señales, y así por ejemplo un hijo pueda sacar a otro del estado de pause.
+		//				- Lo más importante es:
+		//				- Ir guardando de forma correcta los PIDs únicos de los Hijos ya creados, para que en el siguiente fork() el nuevo hijo lo herede
+		//				- El envio de señales debe ser en orden inverso al orden seguido para crear a los Hijos (Ej: si creacion de de Hijos con fork ha sido: 1º)Hijo1, 2º)Hijo2, 3º)Hijo3, entonces el envio de señales deberá ser:
+		//					- El Padre podrá enviar señales a todos sus Hijos
+		//					- Un Hijo sólo podrá enviar señales a los hermanos que tengan un número de PID único menor que el.
 		//	Idea 4: Varias Tuberias para comunicar procesos:
 		//			Tuberia 1: Padre-->Hijo1, envio de mandato1
 		//			Tuberia 2: Padre-->Hijo2, envio de mandato2
