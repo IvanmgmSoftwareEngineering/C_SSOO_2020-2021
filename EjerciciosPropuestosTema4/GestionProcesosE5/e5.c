@@ -25,6 +25,7 @@
 #include <unistd.h> // para Llamada al Sistema fork()
 #include <signal.h> // para Llamada al Sistema signal()
 #include <sys/types.h>
+#include <sys/errno.h>// para variable errno
 
 
 // CABECERAS FUNCIONES UTILIZADAS DENTRO DE MAIN
@@ -39,30 +40,30 @@
 //---------------------------------
 
 // ZONA DECLARACION VARIABLE GLOBALES (fuera de la función main())
-pid_t vector_PIDs[3]; // Variable de tipo vector, Global para almacenar lo que devuelven las Llamadas al Sistema fork(2). Esto nos permitirá conocer los PIDs entre Procesos que son Hermanos. Se pone aquí fuera porque esta variable para que pueda ser consultada desde las funciones manejadoras() de señales que están fuera del main()
-pid_t PID_unico_padre;
-pid_t PID_unico_hijo1;
-pid_t PID_unico_hijo2;
 int fd_tuberia_del_padre_al_hijo1[2]; // GLOBAL PORQUE SE GESTIONA EN función fuera del main() (manejadora de señales)
 int fd_tuberia_del_padre_al_hijo2[2]; // GLOBAL PORQUE SE GESTIONA EN función fuera del main() (manejadora de señales)
-int fd_tuberia_del_hijo1_al_hijo2[2]; // GLOBAL PORQUE SE GESTIONA EN función fuera del main() (manejadora de señales)
+int fd_tuberia_del_hijo2_al_hijo1[2]; // GLOBAL PORQUE SE GESTIONA EN función fuera del main() (manejadora de señales)
 // FIN ZONA DECLARACION VARIABLE GLOBALES
 //---------------------------------
 // EMPIEZA FUNCION MAIN
-int main (int argc, char *argv[], char *envp[]){
+int main (int argc, char *argv[]){
 
 printf("------------------\n");
 printf("EMPIEZA EL PROGRAMA\n");
 
 // ZONA DE DECLARACION DE VARIABLES LOCALES FUNCIÓN MAIN()
-		int i;
-		char envio_datos_hijo1[4096]; // Esta variable de tipo apuntador está Declarada e Inicializada Mediante la Técnica de Reserva de Memoria Estática.
-		char recepcion_datos_hijo2[4096];
+		int status1;
+		int status2;
+		char recepcion_datos_hijo2_desde_padre[512];
+		char recepcion_datos_hijo1_desde_padre[512];
 		char mandato1[100]="ls -la";
 		char mandato2[100]="tr \"d\" \"D\"";
 		char linea[200]="ls -la |tr \"d\" \"D\"";
 		pid_t pid1_fork;// Lo que devuelve la Llamada al Sistema fork() no es un int (aunque lo parezca), si no una variable de tipo pid_t. Lo que tiene de especial la variable de tipo pid_t, es que la variable pid_t cambia su valor dependiendo de cuál sea el Proceso desde el que la estamos consultando
 		pid_t pid2_fork;
+		pid_t PID_unico_padre;
+		pid_t PID_unico_hijo1;
+		pid_t PID_unico_hijo2;
 
 
 // FIN ZONA DE DECLARACION DE VARIABLES LOCALES FUNCIÓN MAIN()
@@ -267,89 +268,108 @@ printf("EMPIEZA EL PROGRAMA\n");
 				printf("Mandato 1 = %s \n",mandato1);
 				printf("Mandato 2 = %s \n",mandato2);
 
-				pipe(fd_tuberia_del_padre_al_hijo1); // Padre-->Hijo1.Tubería para comunicación entre el Padre y el Hijo 1. Para el envio del mandato 1 desde el Padre al Hijo 1
-				pipe(fd_tuberia_del_padre_al_hijo2); // Hijo1-->Hijo2.Tubería para comunicación entre el Padre y el Hijo 2. Para el envio del mandato 2 desde el Padre al Hijo 1
-				pipe(fd_tuberia_del_hijo1_al_hijo2); // Hijo1-->Hijo2.Tubería para comunicación entre el Hijo 1 y el Hijo 2. Para el envio de Salida Estandar de execvp(3) del Hijo 1 a la Entrada Estandar de execvp(3) del Hijo2
+				pipe(fd_tuberia_del_padre_al_hijo1); // Padre-->Hijo1.Tubería para comunicación entre el Padre y el Hijo 1. Para el envio del mandato 2 desde el Padre al Hijo 1
+				pipe(fd_tuberia_del_padre_al_hijo2); // Padre-->Hijo2.Tubería para comunicación entre el Padre y el Hijo 2. Para el envio del mandato 1 desde el Padre al Hijo 2
+				pipe(fd_tuberia_del_hijo2_al_hijo1); // Hijo2-->Hijo1.Tubería para comunicación entre el Hijo 2 y el Hijo 1. Para el envio de Salida Estandar de execvp(3) del Hijo 2 a la Entrada Estandar de execvp(3) del Hijo1
 				pid1_fork=fork();
 
 				if(pid1_fork<0){ // ERROR AL HACER EL primer fork()
 					printf("Error: al hacer el primer fork()");
 				}else if(pid1_fork==0){// ESTAMOS EN EL HIJO 1
 					signal(SIGUSR1,manejador_hijo_1);
-					//signal(SIGINT,manejador_hijo_1);
-					//vector_PIDs[1]=getpid();
-					//printf("Hijo 1 ==> vector_PIDs[1]=%i\n",vector_PIDs[1]);
 					PID_unico_hijo1=getpid();
-					printf("Hijo 1 ==> PID_unico_hijo1=%i\n",PID_unico_hijo1);
-					printf("Hijo 1 ==> PID_unico_Padre_hijo1=%i\n",getppid());
-					/*close(fd_tuberia_del_padre_al_hijo2[0]);//Padre---->>Hijo2.El Hijo 1 no escribe en esta tubería
+					close(fd_tuberia_del_padre_al_hijo2[0]);//Padre---->>Hijo2.El Hijo 1 no escribe en esta tubería
 					close(fd_tuberia_del_padre_al_hijo2[1]);//Padre---->>Hijo2.El Hijo 1 no lee en esta tubería
 					close(fd_tuberia_del_padre_al_hijo1[1]);//Padre---->>Hijo1. El Hijo 1 solo lee, no escribe, en esta tubería. Cierro fd_tph2[1] desde el Hijo 1.
-					close(fd_tuberia_del_hijo1_al_hijo2[0]);//Hijo1---->>Hijo2. El Hijo 1 solo escribe, no lee, en esta tubería. Cierro fd_th1h2[0] desde el Hijo 1.
-					*/printf("El Hijo 1 se queda en pause\n");
+					close(fd_tuberia_del_hijo2_al_hijo1[1]);//Hijo2---->>Hijo1. El Hijo 1 solo lee, no escribe, en esta tubería. Cierro fd_th2h1[1] desde el Hijo 1.
+					printf("El Hijo 1 se queda en pause a la espera de recibir seál desde el Hijo 2\n");
 					pause();//Ponemos al Hijo 1 en estado de pause, en espera de recibir una señal por parte del Padre
-					sleep(2);
-					printf("El Hijo 1 sale del pause\n");
-					printf("El Hijo 1 duerme durante dos segundos\n");
-					sleep(2);
-					printf("El Hijo 1 envia una señal al Hijo 2 para que salga del pause\n");
-					kill(PID_unico_hijo2,SIGUSR1); //El Hijo 1 envia una señal al Hijo 2 para que salga del pause.
-					printf("El Hijo 1 muere\n");
-					exit(0);
+					printf("El Hijo 1 sale del pause porque ha recibido una señal del Padre\n");
+					read(fd_tuberia_del_padre_al_hijo1[0],recepcion_datos_hijo1_desde_padre,512);
+					printf("El Hijo 1 lee de la Tuberia Padre-->Hijo1. Mensaje recibido: %s\n",recepcion_datos_hijo1_desde_padre);
+					printf("El Hijo 1 redirige la Entrada Estandar desde el Teclado(2) al extremo de lectura de la Tuberia Hijo2-->Hijo1 haciendo uso de de close(2) y dup(2)\n");
+					close(0);//Cierro del Descriptor de Fichero asociado al Teclado (0) por lo que después de hacer el close(), el Descriptor de Fichero 0 estará Libre. Recordar que dup() asigna por defecto el número de Descriptor de Fichero libre más pequeño disponible
+					dup(fd_tuberia_del_hijo2_al_hijo1[0]);//Haciendo dup() estoy: 1º) Redirigiendo la Entrada Estandar del Teclado (Descriptor de Fichero =0) al extremo de lectura de la Tuberia Hijo2-->Hijo1. 2º) Lee en la Tubería (me ahorro el read)
+					printf("El Hijo 1 Ejecuta el mandato (de tipo Filtro) con execlp() recibido desde el Padre y habiendo redirigido previamente la Entrada Estandar.\n");
+					execlp("tr","tr","\"d\"","\"D\"",NULL);
+					//Si llegamos hasta aquí es que algo ha ido mal en el execlp().
+					printf("Error execlp() del Hijo 1: %s",strerror(errno));
+					exit(1);//El Hijo 1 muere. Si llega hasta aquí es porque algo no ha ido bien en el excelp()
 				}else if (pid1_fork>0){// ESTAMOS EN EL PADRE
+					PID_unico_hijo1=pid1_fork;
 					pid2_fork=fork();
 					if(pid2_fork<0){// ERROR AL HACER EL segundo fork()
 						printf("Error: al hacer el segundo fork()");
 					}else if(pid2_fork==0){// ESTAMOS EN EL HIJO 2
+						//Desde el Hijo 2 si concozco el PID úncio del Hijo 1, pero al revés no.
 						signal(SIGUSR1,manejador_hijo_2);
-						//signal(SIGINT,manejador_hijo_2);
-						//vector_PIDs[2]=getpid();
-						//printf("Hijo 2 ==> vector_PIDs[2]=%i\n",vector_PIDs[2]);
 						PID_unico_hijo2=getpid();
-						printf("Hijo 2 ==> PID_unico_hijo2=%i\n",PID_unico_hijo2);
-						printf("Hijo 2 ==> PID_unico_Padre_hijo2=%i\n",getppid());
-						/*close(fd_tuberia_del_padre_al_hijo1[0]);//Padre---->>Hijo1.El Hijo 2 no escribe en esta tubería
+						close(fd_tuberia_del_padre_al_hijo1[0]);//Padre---->>Hijo1.El Hijo 2 no escribe en esta tubería
 						close(fd_tuberia_del_padre_al_hijo1[1]);//Padre---->>Hijo1.El Hijo 2 no lee en esta tubería
 						close(fd_tuberia_del_padre_al_hijo2[1]);//Padre---->>Hijo2. El Hijo 2 solo lee, no escribe, en esta tubería. Cierro fd_tph2[1] desde el Hijo 2.
-						close(fd_tuberia_del_hijo1_al_hijo2[1]);//Hijo1---->>Hijo2. El Hijo 2 solo lee, no escribe, en esta tubería. Cierro fd_th1h2[1] desde el Hijo 2.
-						*/printf("El Hijo 2 se queda en pause\n");
+						close(fd_tuberia_del_hijo2_al_hijo1[0]);//Hijo2---->>Hijo1. El Hijo 2 solo escribe, no lee, en esta tubería. Cierro fd_th2h1[0] desde el Hijo 2.
+						printf("El Hijo 2 se queda en pause a la espera de recibir señal desde el Padre\n");
 						pause(); //Ponemos al Hijo 2 en estado de pause, en espera de recibir una señal por parte del Padre
-						printf("El Hijo 2 sale del pause\n");
-						printf("El Hijo 2 duerme durante dos segundos\n");
-						sleep(2);
-						/*printf("El Hijo 2 envia una señal al Hijo 1 para que salga del pause\n");
-						kill(PID_unico_hijo1,SIGUSR1); //El Hijo 1 envia una señal al Hijo 2 para que salga del pause.
-						*/printf("El Hijo 2 muere\n");
-						exit(0);
+						printf("El Hijo 2 sale del pause porque ha recibido una señal del Padre\n");
+						printf("El Hijo 2 lee de la Tubería Padre-->Hijo2\n");
+						read(fd_tuberia_del_padre_al_hijo2[0],recepcion_datos_hijo2_desde_padre,512);
+						printf("El Hijo 2 ha recibido a través de la Tubería Padre-->Hijo2: %s\n",recepcion_datos_hijo2_desde_padre);
+						printf("El Hijo 2 redirige la Salida Estandar al extremo de escritura de la Tuberia Hijo2-->Hijo1 haciendo uso de de close() y dup()\n");
+						close(1);//Cierro del Descriptor de Fichero asociado a la Pantalla (1) por lo que después de hacer el close(), el Descriptor de Fichero 1 estará Libre. Recordar que dup() asigna por defecto el número de Descriptor de Fichero libre más pequeño disponible
+						dup(fd_tuberia_del_hijo2_al_hijo1[1]);//Haciendo dup() estoy: 1º) Redirigiendo la Salida Estandar de la pantalla (Descriptor de Fichero =1) al extremo de escritura de la Tuberia Hijo2-->Hijo1. 2º) Escribiendo en la Tubería (me ahorro el write)
+						//printf("El Hijo 2 Ejecuta el mandato recibido con execvp(3)\n");
+						execlp("ls","ls","-la",NULL);
+						//Si llegamos hasta aquí es que algo ha ido mal en el execlp().
+						printf("Error execlp() del Hijo 1: %s",strerror(errno));
+						exit(1);//El Hijo 2 muere. Si llegamos hasta aquí es que algo ha ido mal en el execlp().
 					}else if(pid2_fork>0){// ESTAMOS EN EL PADRE
-						//vector_PIDs[0]=getpid();
-						//printf("Padre ==> vector_PIDs[0]=%i\n",vector_PIDs[0]);
-						printf("Padre-->pid1_fork=%i; visto desde el Padre deberia ser el mismo que el PID unico del hijo 1\n",pid1_fork);
-						printf("Padre-->pid2_fork=%i; visto desde el Padre deberia ser el mismo que el PID unico del hijo 2\n",pid2_fork);
+						PID_unico_hijo2=pid2_fork;
 						PID_unico_padre=getpid();
-						printf("Padre ==> PID_unico_padre=%i\n",PID_unico_padre);
-						/*close(fd_tuberia_del_padre_al_hijo1[0]);//Padre---->>Hijo1. El Padre solo escribe, no lee en esta tubería. Cierro fd_tph1[0] desde el Padre.
+						close(fd_tuberia_del_padre_al_hijo1[0]);//Padre---->>Hijo1. El Padre solo escribe, no lee en esta tubería. Cierro fd_tph1[0] desde el Padre.
 						close(fd_tuberia_del_padre_al_hijo2[0]);//Padre---->>Hijo2. El Padre solo escribe, no lee en esta tubería. Cierro fd_tph2[0] desde el Padre.
-						close(fd_tuberia_del_hijo1_al_hijo2[0]);// El Padre no escribe en esta tuberia
-						close(fd_tuberia_del_hijo1_al_hijo2[1]);// El Padre no lee en esta Tuberia
-						*/printf("El Padre se duerme durante dos segundos\n");
+						close(fd_tuberia_del_hijo2_al_hijo1[0]);// El Padre no escribe en esta tuberia
+						close(fd_tuberia_del_hijo2_al_hijo1[1]);// El Padre no lee en esta Tuberia
 						sleep(2);
 						printf("-----------------\n");
 						printf("El Padre se despierta\n");
-						printf("El Padre envia una señal al Hijo 1 para que salga del pause\n");
-						kill(PID_unico_hijo1,SIGUSR1); //Enviamos señal al Hijo 1 para que salga del pause(3)
-						printf("El Padre hace un waitpid(1) en espera de que el Hijo 2 muera\n");
-						waitpid(PID_unico_hijo2,NULL,0);//Esperamos a que muera el Hijo 2 para salir del wait(1)
-						printf("El Padre sale del wait después de que el Hijo 2 haya muerto\n");
+						printf("El Padre escribe en la Tuberia Padre-->Hijo1, el mandato que quiere que el Hijo 1 ejecute con execvp(3):(segundo mandato de la línea) %s\n", mandato2);
+						write(fd_tuberia_del_padre_al_hijo1[1],mandato2,100);
+						printf("El Padre escribe en la Tuberia Padre-->Hijo2, el mandato que quiere que el Hijo 2 ejecute con execvp(3):(primer mandato de la línea) %s\n", mandato1);
+						write(fd_tuberia_del_padre_al_hijo2[1],mandato1,100);
+						printf("El Padre envia una señal al Hijo 2 para que salga del pause\n");
+						kill(PID_unico_hijo2,SIGUSR1); //Enviamos señal al Hijo 1 para que salga del pause(3)
+						printf("El Padre hace el primer waitpid(1) en espera de que el Hijo 2 muera\n");
+						waitpid(PID_unico_hijo2,&status1,0);//Esperamos a que muera el Hijo 2 para salir del wait(1)
+						printf("El Padre sale del primer wait después de que el Hijo 2 haya muerto\n");
+						printf("El Padre comprueba como ha ido la ejecución del execlp() en el Hijo 2 haciendo uso de las Macros WIFEXITED y WEXITSTATUS\n");
+						if(WIFEXITED(status1)!= 0){ //Si es distinta de cero el Hijo 2 ha hecho exit() o bien desde el execlp() o bien desde su propio código
+							if(WEXITSTATUS(status1)!=0){ //Si es distinto de cero algo ha ido mal en el execlp() del Hijo 2. Esta macro sólo es consultable en el caso de que WIFEXITED sea distinta de cero (es decir, el Hijo 2 haya terminado)
+								printf("El Hijo 2 ya esta muerto. Algo ha ido mal en el execlp() del Hijo 2.\n");
+
+							}else{
+								printf("El Hijo 2 ya ha muerto. En el padre se ha comprobado que la ejecución del execlp() del Hijo 2 ha ido bien.\n");
+								printf("El Padre envia una señal al Hijo 1 para que salga del pause\n");
+								kill(PID_unico_hijo1,SIGUSR1); //El Hijo 1 envia una señal al Hijo 2 para que salga del pause.
+							}
+						}
+
+						printf("El Padre hace el segundo waitpid(1) en espera de que el Hijo 1 muera\n");
+						waitpid(PID_unico_hijo1,NULL,0);//Esperamos a que muera el Hijo 2 para salir del wait(1)
+						printf("El Padre sale del segundo wait después de que el Hijo 1 haya muerto\n");
+						printf("El Padre comprueba como ha ido la ejecución del execlp() en el Hijo 2 haciendo uso de las Macros WIFEXITED y WEXITSTATUS\n");
+						if(WIFEXITED(status2)!= 0){ //Si es distinta de cero el Hijo 2 ha hecho exit() o bien desde el execlp() o bien desde su propio código
+							if(WEXITSTATUS(status2)!=0){ //Si es distinto de cero algo ha ido mal en el execlp() del Hijo 2. Esta macro sólo es consultable en el caso de que WIFEXITED sea distinta de cero (es decir, el Hijo 2 haya terminado)
+								printf("El Hijo 1 ya esta muerto. Algo ha ido mal en el execlp() del Hijo 1.\n");
+
+							}else{
+								printf("El Hijo 1 ya ha muerto. En el padre se ha comprobado que la ejecución del execlp() del Hijo 1 ha ido bien.\n");
+							}
+						}
 						printf("El Padre muere\n");
 						exit(0); //El proceso Padre muere
 					}
 				}
 
-				//Dudas:
-				//	duda1: se me muestra el prompt en alguna parte
-				//	duda2: al enviar con kill una señal dirigida a un proceso determinado, esta señal es recogida por ambos procesos
-				//	duda3: no se muestra el printf(1) que en el padre a continuación del kill
 //---------------------------------
 }// FIN FUNCIÓN MAIN
 //---------------------------------
@@ -357,33 +377,33 @@ printf("EMPIEZA EL PROGRAMA\n");
 	//IMPLEMENTACION FUNCION 1
 		void manejador_padre(int signal){
 			if(signal == SIGINT){
-				printf("Señal=%i recibida en el Padre\n",signal);
+				//printf("Señal=%i recibida en el Padre\n",signal);
 			}else if(signal ==SIGUSR1){
-				printf("Señal=%i recibida en el Padre\n",signal);
+				//printf("Señal=%i recibida en el Padre\n",signal);
 			}else if(signal ==SIGUSR2){
-				printf("Señal=%i recibida en el Padre\n",signal);
+				//printf("Señal=%i recibida en el Padre\n",signal);
 			}
 		}
 
 	//IMPLEMENTACION FUNCION 2
 		void manejador_hijo_1(int signal){
 			if(signal == SIGINT){
-				printf("Señal=%i recibida en el Hijo 1\n",signal);
+				//printf("Señal=%i recibida en el Hijo 1\n",signal);
 			}else if(signal ==SIGUSR1){
-				printf("Señal=%i recibida en el Hijo 1\n",signal);
+				//printf("Señal=%i recibida en el Hijo 1\n",signal);
 			}else if(signal ==SIGUSR2){
-				printf("Señal=%i recibida en el Hijo 1\n",signal);
+				//printf("Señal=%i recibida en el Hijo 1\n",signal);
 			}
 		}
 
 	//IMPLEMENTACION FUNCION 3
 		void manejador_hijo_2(int signal){
 			if(signal == SIGINT){
-				printf("Señal=%i recibida en el Hijo 2\n",signal);
+				//printf("Señal=%i recibida en el Hijo 2\n",signal);
 			}else if(signal ==SIGUSR1){
-				printf("Señal=%i recibida en el Hijo 2\n",signal);
+				//printf("Señal=%i recibida en el Hijo 2\n",signal);
 			}else if(signal ==SIGUSR2){
-				printf("Señal=%i recibida en el Hijo 2\n",signal);
+				//printf("Señal=%i recibida en el Hijo 2\n",signal);
 			}
 		}
 
